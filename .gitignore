@@ -1,0 +1,26 @@
+# ===== 凭证相关（红线：仓库零凭证）=====
+.env
+.env.*
+!.env.example
+*.token
+*token*.json
+mcp.json
+!mcp-config.example.json
+
+# ===== 内部文档（含决策信息，不进公开仓库）=====
+*-context.md
+*交接*.md
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
