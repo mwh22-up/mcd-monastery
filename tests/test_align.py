@@ -23,6 +23,8 @@ GOLDEN_DIR = os.path.join(TESTS_DIR, "golden")
 RITUALS = ("morning", "blessing", "inventory", "transcend", "merit")
 FRAME_CHARS = set("┏┓┗┛━┃┌┐└┘─│")
 HEAVY_CHARS = set("┏┓┗┛━┃")
+DOC_SOURCES = ("README.md", os.path.join("docs", "demo.md"))
+DEMO_MARK = "演示模式 · DEMO"      # 仪式输出块的判据：目录树与命令示例都不带它
 
 
 def run_cli(*args):
@@ -40,6 +42,29 @@ def run_cli(*args):
 def read_golden(name):
     with open(os.path.join(GOLDEN_DIR, "%s.txt" % name), encoding="utf-8") as f:
         return f.read()
+
+
+def read_doc(rel):
+    with open(os.path.join(REPO, rel), encoding="utf-8") as f:
+        return f.read()
+
+
+def fenced_blocks(rel):
+    """提取 Markdown 围栏代码块，返回 [(正文起始行号, 正文)]。"""
+    lines = read_doc(rel).splitlines()
+    blocks = []
+    i = 0
+    while i < len(lines):
+        if not lines[i].startswith("```"):
+            i += 1
+            continue
+        start = i + 1
+        end = start
+        while end < len(lines) and not lines[end].startswith("```"):
+            end += 1
+        blocks.append((start + 1, "\n".join(lines[start:end])))
+        i = end + 1
+    return blocks
 
 
 class GoldenTest(unittest.TestCase):
@@ -61,6 +86,40 @@ class GoldenTest(unittest.TestCase):
                 self.assertEqual(code, 0, err)
                 self.assertEqual(err, "")
                 self.assertEqual(out.splitlines(), read_golden(name).splitlines())
+
+
+class DocBlockTest(unittest.TestCase):
+    """文档里的仪式输出块必须逐字取自 golden —— README 自己声明「一律从 golden 复制，不手写」。
+
+    golden 已由 GoldenTest 锁在 CLI 上，这里把文档也锁上，补齐 CLI → golden → 文档的最后一环：
+    改了版面只重新生成 golden 而忘了回填文档，会在这里红。
+    """
+
+    def test_doc_blocks_are_golden_substrings(self):
+        goldens = [read_golden(name) for name in RITUALS]
+        found = 0
+        for rel in DOC_SOURCES:
+            for lineno, body in fenced_blocks(rel):
+                if DEMO_MARK not in body:
+                    continue
+                found += 1
+                with self.subTest(doc=rel, line=lineno):
+                    self.assertTrue(
+                        any(body in text for text in goldens),
+                        "%s 第 %d 行起的输出块已与 tests/golden/ 漂移，请从 golden 重新复制"
+                        % (rel, lineno))
+        self.assertEqual(found, 6, "应有 6 个仪式输出块：README 晨课 1 + demo.md 五仪式 5")
+
+    def test_demo_md_quotes_every_ritual_in_full(self):
+        doc = read_doc(os.path.join("docs", "demo.md"))
+        for name in RITUALS:
+            with self.subTest(ritual=name):
+                self.assertIn(read_golden(name).strip(), doc,
+                              "docs/demo.md 缺 %s 的完整 golden 输出" % name)
+
+    def test_readme_shows_the_morning_ritual(self):
+        self.assertIn(read_golden("morning").strip(), read_doc("README.md"),
+                      "README 第二屏的晨课输出块已与 golden 漂移")
 
 
 class DemoBannerTest(unittest.TestCase):
