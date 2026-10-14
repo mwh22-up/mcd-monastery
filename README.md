@@ -86,7 +86,8 @@ python cli/monastery.py --demo inventory  # 无需 Token，30 秒看完整效果
 ⚰️ <b>超度仪式</b><br>
 <code>python cli/monastery.py transcend</code><br>
 对七日内过期的券与积分逐项给核销路径；报价必先核价。<br>
-<code>query-nearby-stores</code> <code>query-meals</code> <code>query-meal-detail</code> <code>calculate-price</code> <code>mall-points-products</code>
+CLI 实际调用：<code>query-my-coupons</code> <code>query-my-account</code> <code>mall-points-products</code>（仅当下月有临期积分）<br>
+AI 主持时按需追加：<code>query-nearby-stores</code> <code>query-meals</code> <code>query-meal-detail</code> <code>calculate-price</code>
 </td>
 <td width="33%" valign="top">
 📜 <b>功德簿</b><br>

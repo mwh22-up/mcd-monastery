@@ -94,8 +94,12 @@ def call(tool, args=None):
             "Authorization": "Bearer " + token,
         },
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
-        raw = r.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            raw = r.read().decode("utf-8")
+    finally:
+        # 失败也记账：fetch_* 会吞掉异常继续调下一个 tool，时间戳不更新会让它零间隔发出
+        _last_call_at = time.time()
     if raw.startswith("data:"):
         for line in raw.split("\n"):
             if line.startswith("data:"):
@@ -104,7 +108,6 @@ def call(tool, args=None):
     resp = json.loads(raw)
     content = resp.get("result", {}).get("content", [])
     text = content[0]["text"] if content else ""
-    _last_call_at = time.time()
     return extract_json(text), text
 
 
@@ -509,7 +512,7 @@ def render_merit(data):
             ("修行足迹", "%d 次朝圣，累计布施 %.1f 元" % (count, total_amt))]
     if data["top_store"]:
         rows.append(("常驻道场", "%s（%d 次）" % data["top_store"]))
-    lines += ui.kv_table(rows)
+    lines += ui.panel("修行档案", ui.kv_table(rows))   # 与 inventory 的积分表同一口径：键值表一律进框
     top_items = data["top_items"]
     if top_items:
         top_qty = max(qty for _, qty in top_items)
