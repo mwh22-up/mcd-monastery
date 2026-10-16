@@ -1,14 +1,8 @@
 # 麦门修道院 · MCD Monastery
 
-```text
-       _____      _____
-      /     \    /     \
-     |       |  |       |
-     |  ___  |  |  ___  |
-     | |   | |  | |   | |
-   ______________________
-   M C D   M O N A S T E R Y
-```
+<p align="center">
+<img src="assets/hero.webp" width="100%" alt="麦门修道院山门横幅：金色石质山门立于阶梯平台之上，双拱构成 M 形，门脊有宝顶，两侧香烟袅袅，身后绛红矮墙与远山，天空米白">
+</p>
 
 > **把「麦门」做成一座赛博修道院：每天 30 秒，替你抢救正在过期的券和积分。**
 
@@ -62,19 +56,22 @@ python cli/monastery.py --demo inventory  # 无需 Token，30 秒看完整效果
 
 <table>
 <tr>
-<td width="33%" valign="top">
+<td width="33%" valign="top" align="center">
+<img src="assets/ritual-morning.webp" width="120" alt="晨课徽记：日轮升于拱门之后，门下悬一口钟"><br>
 🌅 <b>晨课</b><br>
 <code>python cli/monastery.py morning</code><br>
 今日日签：活动机缘 + 可领福报 + 一句麦门箴言。<br>
 <code>now-time-info</code> <code>campaign-calendar</code> <code>available-coupons</code>
 </td>
-<td width="33%" valign="top">
+<td width="33%" valign="top" align="center">
+<img src="assets/ritual-blessing.webp" width="120" alt="领福徽记：化缘钵居中，三枚钱币悬于钵上方，背后放射光线"><br>
 🧧 <b>领福</b><br>
 <code>python cli/monastery.py blessing</code><br>
 一键领尽麦麦省所有可领之券，幂等、绝不漏领。<br>
 <code>auto-bind-coupons</code>
 </td>
-<td width="33%" valign="top">
+<td width="33%" valign="top" align="center">
+<img src="assets/ritual-inventory.webp" width="120" alt="圣物盘点徽记：多层石架置卷轴与钱币堆，下方一排算珠"><br>
 📦 <b>圣物盘点</b><br>
 <code>python cli/monastery.py inventory</code><br>
 券包与积分全资产巡检，临期券按剩余天数排倒计时条。<br>
@@ -82,20 +79,22 @@ python cli/monastery.py --demo inventory  # 无需 Token，30 秒看完整效果
 </td>
 </tr>
 <tr>
-<td width="33%" valign="top">
+<td width="33%" valign="top" align="center">
+<img src="assets/ritual-transcend.webp" width="120" alt="超度徽记：沙漏立于拱门之前，座下莲花，顶上一簇火焰"><br>
 ⚰️ <b>超度仪式</b><br>
 <code>python cli/monastery.py transcend</code><br>
 对七日内过期的券与积分逐项给核销路径；报价必先核价。<br>
 CLI 实际调用：<code>query-my-coupons</code> <code>query-my-account</code> <code>mall-points-products</code>（仅当下月有临期积分）<br>
 AI 主持时按需追加：<code>query-nearby-stores</code> <code>query-meals</code> <code>query-meal-detail</code> <code>calculate-price</code>
 </td>
-<td width="33%" valign="top">
+<td width="33%" valign="top" align="center">
+<img src="assets/ritual-merit.webp" width="120" alt="功德簿徽记：金色册页刻着计数痕，一支毛笔斜搭其上，旁有一枚印章"><br>
 📜 <b>功德簿</b><br>
 <code>python cli/monastery.py merit</code><br>
 订单考古：消费足迹、常驻道场、忠诚圣物、功德结算与段位。<br>
 <code>order-list</code> <code>list-nutrition-foods</code>
 </td>
-<td width="33%" valign="top">
+<td width="33%" valign="top" align="center">
 ⚡ <b>30 秒直测</b><br>
 <code>python cli/monastery.py --demo inventory</code><br>
 <code>--demo</code> 读 2026-10-10 实测快照，不发网络请求、不需要 Token，输出顶部带 DEMO 横幅。<br>
@@ -122,12 +121,12 @@ AI 主持时按需追加：<code>query-nearby-stores</code> <code>query-meals</c
 功德 = Σ订单金额 × 10 + 订单数 × 50（只用 `order-list` 的真实金额与笔数，不估不猜）。
 
 | 徽章 | 等级 | 功德值 | 这一级的施主 |
-|------|------|--------|-------------|
-| `[*    ]` | 见习麦门徒 | < 200 | 刚推开山门，连券都还没领全 |
-| `[**   ]` | 麦门侍僧 | 200 ~ 999 | 晨课开始不辍，券包渐厚 |
-| `[***  ]` | 薯条骑士 | 1000 ~ 4999 | 有常驻道场、有忠诚圣物（本仓库作者：功德 2709） |
-| `[**** ]` | 巨无霸主教 | 5000 ~ 19999 | 积分与券从不过期，超度无从下手 |
-| `[*****]` | 麦门大祭司 | ≥ 20000 | 麦门永存的具身证明 |
+|:----:|------|--------|-------------|
+| <img src="assets/badge-1-novice.webp" width="44" alt="见习麦门徒徽章：盾形徽记，拱门下一株幼苗"> | 见习麦门徒 | < 200 | 刚推开山门，连券都还没领全 |
+| <img src="assets/badge-2-acolyte.webp" width="44" alt="麦门侍僧徽章：盾形徽记，化缘钵与一支立杖"> | 麦门侍僧 | 200 ~ 999 | 晨课开始不辍，券包渐厚 |
+| <img src="assets/badge-3-knight.webp" width="44" alt="薯条骑士徽章：盾形徽记，交叉双杖，上有拱门，下有三点"> | 薯条骑士 | 1000 ~ 4999 | 有常驻道场、有忠诚圣物（本仓库作者：功德 2709） |
+| <img src="assets/badge-4-bishop.webp" width="44" alt="巨无霸主教徽章：盾形徽记，三层圆塔，顶为冠形拱"> | 巨无霸主教 | 5000 ~ 19999 | 积分与券从不过期，超度无从下手 |
+| <img src="assets/badge-5-highpriest.webp" width="44" alt="麦门大祭司徽章：盾形徽记，日轮照双拱，繁复花边，全套最华丽"> | 麦门大祭司 | ≥ 20000 | 麦门永存的具身证明 |
 
 ## 🎯 目标用户
 
@@ -187,6 +186,8 @@ python cli/monastery.py merit       # 功德簿：订单考古
 
 仅用 Python 标准库（`urllib`），无第三方依赖，无需 `requirements.txt`，Python 3.8+ 即可运行。终端编码与 Windows 颜色支持由 `cli/ui.py` 自举，不需要你导出任何编码环境变量。
 
+**依赖口径**：运行时零依赖覆盖的是 `cli/` —— 纯 Python 标准库，Python 3.8+，跑任何仪式都不需要装任何东西。README 里的插图是预先生成好的资产，已提交在 `assets/` 下；生成它们的 [`tools/gen_assets.py`](tools/gen_assets.py) 是**构建期工具**，额外需要 Pillow 和一个图像生成网关的凭证（凭证只从环境变量读取，仓库零凭证），`cli/` 与 `tests/` 永不 import 它，使用者和评委都不需要运行它。
+
 ## 💬 使用示例
 
 在 MCP 客户端里：
@@ -222,10 +223,19 @@ mcd-monastery/
 ├── CONTEST_DECLARATION.md  # 参赛声明（官方要求，内容不可改）
 ├── MCP_INTEGRATION.md      # MCP 集成说明：Server、12 个 Tool、调用流程、业务价值
 ├── mcp-config.example.json # 脱敏配置示例（Token 只走环境变量占位符）
+├── assets/                 # 视觉资产（AI 生成，图内零文字零商标，已提交）
+│   ├── hero.webp           # 首屏山门横幅 1280×853
+│   ├── ritual-*.webp       # 五仪式圆徽 360×360（细金环框）
+│   ├── badge-*.webp        # 五级段位盾徽 200×200
+│   ├── og-card.png         # GitHub Social preview 卡 1280×640（在仓库设置里上传，不嵌 README）
+│   └── og-bg.webp          # og-card 的无字背景版（备用）
 ├── cli/
 │   ├── monastery.py        # 零依赖 CLI：MCP 取数 + 五仪式编排（取数与渲染分层）
 │   ├── ui.py               # 版面地基：中文显示宽度、框线组件、配色降级、条形图
 │   └── fixtures.py         # --demo 离线快照：2026-10-10 实测原始数据与冻结时钟
+├── tools/
+│   └── gen_assets.py       # 构建期资产生成器：需 Pillow + 图像生成网关凭证；
+│                           # cli/ 与 tests/ 永不 import 它，使用者无需运行
 ├── docs/
 │   └── demo.md             # 端到端实测记录（本 README 的数据出处）
 └── tests/
@@ -234,6 +244,8 @@ mcd-monastery/
     ├── test_color.py       # 颜色降级：--no-color / NO_COLOR / 非 TTY 均无转义码残留
     ├── test_compat.py      # Python 3.8 兼容扫描（ast 扫 3.9+ 构造）
     ├── test_parsers.py     # 锁住 MCP 返回解析行为
+    ├── test_throttle.py    # 限流节流与失败路径
+    ├── test_assets.py      # 资产引用机械校验：路径真实存在 / 每个 img 有 alt / 无孤儿资产
     └── golden/             # 五仪式 --demo 输出基线，README 与 demo.md 的输出块来源
 ```
 
@@ -249,5 +261,6 @@ mcd-monastery/
 
 - 参赛声明（原创性、合规、信息安全、使用提示）：[`CONTEST_DECLARATION.md`](CONTEST_DECLARATION.md)
 - MCP 集成细节与工程约束（Token 只走环境变量、限流节流、只读为主）：[`MCP_INTEGRATION.md`](MCP_INTEGRATION.md)
+- 视觉资产（山门横幅、五仪式圆徽、五级段位盾徽）由 AI 图像模型生成，统一金／绛红／米白三色与石质肌理；**图内零文字、零字母、零商标**，不含任何麦当劳商标或官方视觉元素，生成脚本见 [`tools/gen_assets.py`](tools/gen_assets.py)。
 
 > I'm loving it. 🍟
