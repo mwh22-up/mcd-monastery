@@ -11,6 +11,9 @@ mcp.json
 *-context.md
 *交接*.md
 
+# ===== 视觉资产原图（构建期中间产物，仓库只收优化后的 WebP）=====
+assets/.raw/
+
 # ===== Python =====
 __pycache__/
 *.py[cod]
