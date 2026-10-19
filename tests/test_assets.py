@@ -71,6 +71,11 @@ def webp_has_alpha(path):
     与无损 ``VP8L`` 这里一律按「没有镂空」处理 —— 本仓库的徽记都是带 VP8X
     alpha 块导出的。不是 webp（比如 og-card.png）返回 None。
 
+    TODO：``VP8L`` 其实可以自带 alpha（无损格式的标志位在位流里，不在容器头）。
+    当前判据会把无损导出误判为「没镂空」，失败方向是保守的（该绿的变红，
+    不会该红的变绿）。若将来把 ``tools/gen_assets.py`` 的导出改成无损 WebP，
+    必须同步修改这里的判据，否则这条校验会误报。
+
     不 import Pillow：资产是预先生成并提交的，没装 Pillow 的环境也要能跑这条。
     """
     with open(path, "rb") as f:
@@ -237,10 +242,26 @@ class HtmlCellTest(unittest.TestCase):
 class StdlibOnlyTest(unittest.TestCase):
     """本测试自身的零依赖纪律：只碰标准库，不碰构建期工具。"""
 
-    @unittest.skipUnless(hasattr(sys, "stdlib_module_names"), "需要 Python 3.10+ 的标准库清单")
-    def test_no_third_party_imports(self):
-        mods = own_imported_roots()
-        self.assertEqual(mods - set(sys.stdlib_module_names), set())
+    # 本文件允许 import 的模块白名单。
+    # 用白名单而不是只靠 sys.stdlib_module_names：后者是 Python 3.10+ 才有的，
+    # 而项目声明支持 3.8+，单靠它会让「只用标准库」这条纪律在 3.8/3.9 上被
+    # skip 掉，等于没有校验。白名单是版本无关的，在最低支持版本上照样生效。
+    ALLOWED_IMPORTS = frozenset({"os", "re", "sys", "unittest"})
+
+    def test_imports_stay_within_allowlist(self):
+        """任何新增 import 都必须显式进白名单，第三方模块一律挡掉。"""
+        extra = own_imported_roots() - self.ALLOWED_IMPORTS
+        self.assertEqual(extra, set(),
+                         "资产测试引入了白名单外的模块：%s。"
+                         "新增标准库模块请显式加进 ALLOWED_IMPORTS；"
+                         "第三方模块一律不允许。" % sorted(extra))
+
+    @unittest.skipUnless(hasattr(sys, "stdlib_module_names"),
+                         "白名单交叉校验需要 Python 3.10+ 的标准库清单")
+    def test_allowlist_contains_only_stdlib(self):
+        """3.10+ 上额外确认白名单自身全是标准库，防止有人往白名单里塞第三方模块。"""
+        extra = self.ALLOWED_IMPORTS - set(sys.stdlib_module_names)
+        self.assertEqual(extra, set(), "白名单里出现了非标准库模块：%s" % sorted(extra))
 
     def test_does_not_import_build_tool(self):
         mods = own_imported_roots()

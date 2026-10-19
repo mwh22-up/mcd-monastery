@@ -111,9 +111,14 @@ MANIFEST = [
     ("ritual-morning", "1024x1024", (360, 360), FRAME_MEDALLION,
      "A sunrise disc rising behind a single temple arch, three thin radiating light "
      "beams above it, a small bell hanging under the arch."),
+    # 注：首版的金环明显粗于另四枚，云纹越出环外，绛红底还带放射线肌理，
+    # 并排时是五枚圆徽里唯一的「重边」，脱开了家族。故显式压住环宽与越界。
     ("ritual-blessing", "1024x1024", (360, 360), FRAME_MEDALLION,
      "A wide alms bowl on a small pedestal, three round coin-like discs floating in "
-     "an arc above the bowl, gentle rays behind."),
+     "an arc above the bowl. The circular ring frame must be a thin plain hairline of "
+     "uniform width, exactly like a simple drawn circle. Nothing may extend beyond or "
+     "overlap the ring. The crimson field is flat and plain with no radiating lines "
+     "and no texture pattern."),
     ("ritual-inventory", "1024x1024", (360, 360), FRAME_MEDALLION,
      "A tiered stone shelf holding small rolled scroll cases, a short stack of round "
      "coin-like discs beside them, a single row of abacus beads below."),
