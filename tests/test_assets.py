@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""视觉资产接入 README 的机械校验：引用必须真实存在、每张图必须有 alt、无孤儿资产。
+"""视觉资产接入 README 的机械校验：引用必须真实存在、每张图必须有 alt、无孤儿资产，
+十枚徽记必须带 alpha 透明底。
 
 只用标准库。本文件绝不 import Pillow，也绝不 import tools/gen_assets.py ——
 资产是预先生成好并提交的，没有 Pillow 的环境（评委、CI）跑这套测试也必须全绿。
@@ -24,6 +25,16 @@ TABLE_REGION = re.compile(r"<table\b.*?</table>", re.I | re.S)
 ALT_PUNCT = re.compile(r"""[\s:：;；,，.。、_\-/|()（）\[\]"']+""")
 
 NOT_IN_README = {"og-card.png", "og-bg.webp"}   # 社交卡走仓库设置上传，不嵌 README
+
+# 必须镂空透明底的徽记：五枚仪式圆徽 + 五级段位盾徽。
+# 不透明米白方底在 GitHub 亮色模式下会给每枚徽记镶一圈米白方边，
+# 暗色模式下直接变成深色页面上的米白瓷砖 —— 这条断言把镂空结果锁住，
+# 以后重跑 tools/gen_assets.py 漏了镂空步骤，这里就会红。
+ALPHA_REQUIRED = re.compile(r"^(?:ritual|badge)-[A-Za-z0-9._\-]+\.webp$", re.I)
+ALPHA_REQUIRED_COUNT = 10
+# 整幅构图、铺满自己的画布，按设计就不镂空。
+ALPHA_EXEMPT = {"hero.webp", "og-bg.webp", "og-card.png"}
+IMAGE_SUFFIXES = (".webp", ".png", ".jpg", ".jpeg", ".gif")
 VAGUE_ALTS = {"logo", "image", "img", "icon", "banner",
               "图", "图片", "横幅", "徽章", "hero"}
 
@@ -50,6 +61,25 @@ def attr(tag, pattern):
     if not m:
         return None
     return m.group(1) if m.group(1) is not None else m.group(2)
+
+
+def webp_has_alpha(path):
+    """只用标准库读 RIFF 容器，判断 webp 是否带 alpha 通道。
+
+    扩展格式的 webp 在第 12–16 字节写下 chunk 名 ``VP8X``，紧随其后 chunk 头的
+    第 1 个字节（偏移 20）是特性标志位，bit4 置位即带 alpha。简单有损 ``VP8 ``
+    与无损 ``VP8L`` 这里一律按「没有镂空」处理 —— 本仓库的徽记都是带 VP8X
+    alpha 块导出的。不是 webp（比如 og-card.png）返回 None。
+
+    不 import Pillow：资产是预先生成并提交的，没装 Pillow 的环境也要能跑这条。
+    """
+    with open(path, "rb") as f:
+        head = f.read(24)
+    if len(head) < 24 or head[:4] != b"RIFF" or head[8:12] != b"WEBP":
+        return None
+    if head[12:16] != b"VP8X":
+        return False
+    return bool((head[20] >> 4) & 1)
 
 
 def normalized_alt(alt):
@@ -97,6 +127,34 @@ class AssetReferenceTest(unittest.TestCase):
                          "资产必须走仓库内相对路径，不要 raw.githubusercontent 外链")
         external = re.findall(r"https?://[^\s\"'()]*assets/", text)
         self.assertEqual(external, [], "资产出现了绝对 URL 引用：%s" % external)
+
+
+class AssetAlphaTest(unittest.TestCase):
+    """十枚徽记必须带透明底：镂空一丢，暗色模式下它们就是十块米白瓷砖。"""
+
+    def cutout_assets(self):
+        return [n for n in asset_files() if ALPHA_REQUIRED.match(n)]
+
+    def test_cutout_set_is_complete(self):
+        names = self.cutout_assets()
+        self.assertEqual(len(names), ALPHA_REQUIRED_COUNT,
+                         "需要镂空的徽记应为 %d 枚（五仪式圆徽 + 五级段位盾徽），"
+                         "实际 %d 枚：%s" % (ALPHA_REQUIRED_COUNT, len(names), names))
+
+    def test_cutout_assets_have_alpha_channel(self):
+        for name in self.cutout_assets():
+            self.assertIs(webp_has_alpha(os.path.join(ASSETS_DIR, name)), True,
+                          "%s 没有 alpha 通道（RIFF 头不是 VP8X 或 alpha 标志位未置）："
+                          "镂空步骤丢了，GitHub 暗色模式下会变成米白方片" % name)
+
+    def test_every_asset_image_is_classified(self):
+        """新增的图必须明确要不要镂空：既不符合徽记命名、又不在例外清单里就判红。"""
+        images = [n for n in asset_files() if n.lower().endswith(IMAGE_SUFFIXES)]
+        unclassified = [n for n in images
+                        if not ALPHA_REQUIRED.match(n) and n not in ALPHA_EXEMPT]
+        self.assertEqual(unclassified, [],
+                         "这些图没说清要不要透明底，请归入徽记命名或 ALPHA_EXEMPT：%s"
+                         % unclassified)
 
 
 class ImgAltTest(unittest.TestCase):

@@ -224,11 +224,13 @@ mcd-monastery/
 ├── MCP_INTEGRATION.md      # MCP 集成说明：Server、12 个 Tool、调用流程、业务价值
 ├── mcp-config.example.json # 脱敏配置示例（Token 只走环境变量占位符）
 ├── assets/                 # 视觉资产（已生成并提交，使用者无需生成）
-│   ├── hero.webp           # 首屏山门横幅 1280×853（AI 生成，图内零文字）
-│   ├── ritual-*.webp       # 五仪式圆徽 360×360，细金环框（AI 生成，图内零文字）
-│   ├── badge-*.webp        # 五级段位盾徽 200×200（AI 生成，图内零文字）
-│   ├── og-card.png         # Social preview 卡 1280×640：AI 背景 + 本地字体合成的标题文字，
-│   │                       # 唯一带字的资产；在仓库设置里上传，不嵌 README
+│   ├── hero.webp           # 首屏山门通栏横幅：满宽自适应，README 里不写固定宽度
+│   │                       # （AI 生成，图内零文字）
+│   ├── ritual-*.webp       # 五仪式圆徽 360×360，细金环框、环外透明（AI 生成，图内零文字）
+│   ├── badge-*.webp        # 五级段位盾徽 200×200，盾外透明（AI 生成，图内零文字）
+│   ├── og-card.png         # Social preview 卡 1280×640：AI 背景 + 本机 CJK 字体渲染的
+│   │                       # 标题文字（矢量字形，边缘清晰），唯一带字的资产；
+│   │                       # 在仓库设置里上传，不嵌 README
 │   └── og-bg.webp          # og-card 的无字背景版（备用）
 ├── cli/
 │   ├── monastery.py        # 零依赖 CLI：MCP 取数 + 五仪式编排（取数与渲染分层）
@@ -246,7 +248,8 @@ mcd-monastery/
     ├── test_compat.py      # Python 3.8 兼容扫描（ast 扫 3.9+ 构造）
     ├── test_parsers.py     # 锁住 MCP 返回解析行为
     ├── test_throttle.py    # 限流节流与失败路径
-    ├── test_assets.py      # 资产引用机械校验：路径真实存在 / 每个 img 有 alt / 无孤儿资产
+    ├── test_assets.py      # 资产引用机械校验：路径真实存在 / 每个 img 有 alt /
+    │                       # 无孤儿资产 / 十枚徽记带 alpha 透明底
     └── golden/             # 五仪式 --demo 输出基线，README 与 demo.md 的输出块来源
 ```
 
@@ -262,6 +265,6 @@ mcd-monastery/
 
 - 参赛声明（原创性、合规、信息安全、使用提示）：[`CONTEST_DECLARATION.md`](CONTEST_DECLARATION.md)
 - MCP 集成细节与工程约束（Token 只走环境变量、限流节流、只读为主）：[`MCP_INTEGRATION.md`](MCP_INTEGRATION.md)
-- 视觉资产（山门横幅、五仪式圆徽、五级段位盾徽）由 AI 图像模型生成，统一金／绛红／米白三色与石质肌理；这 11 张内嵌 README 的图**图内零文字、零字母、零商标**。唯一的例外是不嵌 README、只用于仓库 Social preview 的 `og-card.png`：它的标题文字（「麦门修道院 / MCD MONASTERY / 每天 30 秒，替你抢救正在过期的券和积分」）由构建脚本用本机字体合成，不是 AI 生成。全部资产均不含任何麦当劳商标或官方视觉元素，生成脚本见 [`tools/gen_assets.py`](tools/gen_assets.py)。
+- 视觉资产（山门横幅、五仪式圆徽、五级段位盾徽）由 AI 图像模型生成，统一金／绛红／米白三色与石质肌理；这 11 张内嵌 README 的图**图内零文字、零字母、零商标**。唯一的例外是不嵌 README、只用于仓库 Social preview 的 `og-card.png`：它的标题文字（「麦门修道院 / MCD MONASTERY / 每天 30 秒，替你抢救正在过期的券和积分」）不是模型画的，而是构建脚本用本机 CJK 字体（TrueType）渲染合成的，所以边缘是矢量字形级的清晰。全部资产均不含任何麦当劳商标或官方视觉元素，生成脚本见 [`tools/gen_assets.py`](tools/gen_assets.py)。
 
 > I'm loving it. 🍟
