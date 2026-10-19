@@ -20,6 +20,8 @@ ASSET_REF = re.compile(r"assets/[A-Za-z0-9._\-/]+?\.(?:webp|png|jpe?g|gif|svg)")
 IMG_TAG = re.compile(r"<img\b[^>]*>", re.I)
 ALT_ATTR = re.compile(r"""\balt\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
 SRC_ATTR = re.compile(r"""\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.I)
+TABLE_REGION = re.compile(r"<table\b.*?</table>", re.I | re.S)
+ALT_PUNCT = re.compile(r"""[\s:：;；,，.。、_\-/|()（）\[\]"']+""")
 
 NOT_IN_README = {"og-card.png", "og-bg.webp"}   # 社交卡走仓库设置上传，不嵌 README
 VAGUE_ALTS = {"logo", "image", "img", "icon", "banner",
@@ -48,6 +50,11 @@ def attr(tag, pattern):
     if not m:
         return None
     return m.group(1) if m.group(1) is not None else m.group(2)
+
+
+def normalized_alt(alt):
+    """去掉空白与标点后的小写 alt，用来判断整句 alt 是不是只有一个套话词。"""
+    return ALT_PUNCT.sub("", alt).strip().lower()
 
 
 def asset_files():
@@ -104,12 +111,21 @@ class ImgAltTest(unittest.TestCase):
             self.assertIsNotNone(alt, "<img> 缺少 alt 属性：%s" % tag)
             self.assertNotEqual(alt.strip(), "", "<img> 的 alt 为空：%s" % tag)
 
-    def test_alt_text_is_informative(self):
+    def test_alt_text_is_long_enough(self):
         for tag in self.tags:
             alt = (attr(tag, ALT_ATTR) or "").strip()
             self.assertGreaterEqual(len(alt), 8,
                                     "alt 太短，说不清画的是什么：%r" % alt)
-            self.assertNotIn(alt.lower(), VAGUE_ALTS,
+
+    def test_alt_text_is_not_a_placeholder(self):
+        """套话黑名单独立成一个用例。
+
+        黑名单里的词都短于上一条的 8 字下限，和长度断言写在同一个方法里就永不触发
+        （先失败先中断）—— 分开成两个用例，alt="logo" 这类才会由这一条自己判红。
+        """
+        for tag in self.tags:
+            alt = (attr(tag, ALT_ATTR) or "").strip()
+            self.assertNotIn(normalized_alt(alt), VAGUE_ALTS,
                              "alt 是无信息量的套话：%r" % alt)
 
     def test_every_img_src_is_a_repo_asset(self):
@@ -150,13 +166,14 @@ class HtmlCellTest(unittest.TestCase):
     """HTML 表格里写 markdown 不会渲染，所以单元格区段内不许出现 markdown 语法。"""
 
     def test_html_cells_have_no_markdown(self):
-        text = read_readme()
-        start = text.index("<table>")
-        end = text.index("</table>") + len("</table>")
-        region = text[start:end]
-        for token in ("`", "**", "!["):
-            self.assertNotIn(token, region,
-                             "HTML 表格里出现了不会渲染的 markdown 记号：%r" % token)
+        """遍历**所有** <table>…</table> 区段，将来再加一个表格不会被静默跳过。"""
+        regions = TABLE_REGION.findall(read_readme())
+        self.assertTrue(regions, "README 里找不到 HTML 表格，这条校验失去了对象")
+        for i, region in enumerate(regions):
+            for token in ("`", "**", "!["):
+                self.assertNotIn(token, region,
+                                 "第 %d 个 HTML 表格里出现了不会渲染的 markdown 记号：%r"
+                                 % (i + 1, token))
 
 
 class StdlibOnlyTest(unittest.TestCase):
