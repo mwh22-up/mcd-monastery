@@ -40,7 +40,7 @@ import urllib.error
 import urllib.request
 
 try:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont
 except ImportError:  # pragma: no cover - 构建期工具，缺库时给出明确指引
     sys.stderr.write(
         "需要 Pillow：pip install Pillow\n"
@@ -56,6 +56,11 @@ BASE_URL = os.environ.get("AI_GATEWAY_BASE_URL", "https://ai-gateway-test.mcdchi
 MODEL = os.environ.get("AI_IMAGE_MODEL", "gpt-image-2")
 
 WEBP_QUALITY = 88
+
+# 横幅裁切窗口的上边位置，占可裁余量的比例。
+# 0.24 是实测校准值：再小会在屋脊上方留出过多空白天空，
+# 再大就会切掉底部那条绛红矮墙带（全图唯一的绛红色块）。
+HERO_TOP_BIAS = 0.24
 
 # ── 统一视觉语言 ──────────────────────────────────────────────────────────
 # 每个 prompt 都会拼上这段。改这里等于整套资产换皮，不会出现半新半旧。
@@ -93,8 +98,14 @@ GATEWAY_SUBJECT = (
 # ── 资产清单 ──────────────────────────────────────────────────────────────
 # (名称, 生成尺寸, 目标展示尺寸, 框型, 主体描述)
 MANIFEST = [
-    # 门面横幅
-    ("hero", "1536x1024", (1280, 853), FRAME_BANNER, GATEWAY_SUBJECT),
+    # 门面横幅。
+    # 裁成 1280×660 而非原生 3:2：满宽铺开时 3:2 在 GitHub 正文宽度下约占
+    # 600px 高，会把 tagline、badge 和对评委最关键的 `--demo` 钩子命令挤到
+    # 折叠线以下。裁后高度约 460px，既保留满宽冲击力又把钩子留在第一屏。
+    # 裁切窗口经过实测校准（见 HERO_TOP_BIAS）：上边留住屋脊尖顶，
+    # 下边必须留住那条绛红矮墙带 —— 它是与徽记家族呼应的唯一绛红色块，
+    # 切掉后整张图只剩金与米白，与五仪式徽记脱开了。
+    ("hero", "1536x1024", (1280, 660), FRAME_BANNER, GATEWAY_SUBJECT),
 
     # 五大仪式徽记
     ("ritual-morning", "1024x1024", (360, 360), FRAME_MEDALLION,
@@ -211,12 +222,61 @@ def generate(name, size, frame, subject, key):
     return path
 
 
+# 需要镂空米白底的资产：圆形徽记与盾形徽章。
+# 起因：不透明米白方底在 GitHub 亮色模式下给每枚徽记加一圈米白方边，
+# 在暗色模式下直接变成深色页面上的米白瓷砖。横幅与 OG 卡是整幅构图，不镂空。
+ALPHA_CUTOUT = {
+    "ritual-morning", "ritual-blessing", "ritual-inventory",
+    "ritual-transcend", "ritual-merit",
+    "badge-1-novice", "badge-2-acolyte", "badge-3-knight",
+    "badge-4-bishop", "badge-5-highpriest",
+}
+
+# 泛洪容差。米白底与金色描边在蓝色通道上差了近 180，40 的容差不会越过描边。
+FLOOD_THRESH = 40
+
+# 泛洪哨兵色。取纯洋红，确保不与三色调色板里的任何颜色相撞。
+_SENTINEL = (255, 0, 255)
+
+
+def _cutout_alpha(im):
+    """把四角连通的背景变透明。
+
+    用「四角泛洪」而不是几何蒙版：圆徽是正圆，但五枚盾徽的外轮廓各不相同
+    （五级徽章越高越华丽，边框形状也不一样），固定蒙版必然啃掉描边或留下月牙。
+    泛洪沿实际描边走，与形状无关。且只填四角连通的区域，
+    图案内部的浅色区域不会被误伤。
+    """
+    probe = im.copy()
+    w, h = probe.size
+    for xy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+        ImageDraw.floodfill(probe, xy, _SENTINEL, thresh=FLOOD_THRESH)
+
+    # 掩膜建在副本上再贴回原图：直接在原图上泛洪的话，
+    # 羽化会把哨兵色的洋红混进边缘像素。
+    mask = Image.new("L", probe.size, 255)
+    mask.putdata([0 if px == _SENTINEL else 255 for px in probe.getdata()])
+    mask = mask.filter(ImageFilter.GaussianBlur(0.6))  # 羽化约 1px 去锯齿
+
+    out = im.convert("RGBA")
+    out.putalpha(mask)
+    return out
+
+
 def optimize(name, target):
-    """缩放 + 转 WebP，落到 assets/。返回字节数。"""
+    """裁切 + 镂空 + 缩放 + 转 WebP，落到 assets/。返回字节数。
+
+    顺序是先在 1024 原图上镂空再缩放：反过来在小图上抠，
+    金环描边只有一两个像素宽，边缘会糊。
+    """
     src = os.path.join(RAW, name + ".png")
     im = Image.open(src).convert("RGB")
-    if name == "og-bg":
+    if name == "hero":
+        im = _crop_to_ratio(im, target[0] / float(target[1]), HERO_TOP_BIAS)
+    elif name == "og-bg":
         im = _crop_to_ratio(im, target[0] / float(target[1]))
+    if name in ALPHA_CUTOUT:
+        im = _cutout_alpha(im)
     im = im.resize(target, Image.LANCZOS)
     out = os.path.join(ASSETS, name + ".webp")
     im.save(out, "WEBP", quality=WEBP_QUALITY, method=6)
