@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """锁住 call() 的 200ms 节流（MCP_INTEGRATION.md §5 / SKILL.md 红线）。
 
-重点是失败路径：fetch_morning / fetch_transcend 把部分 call() 包在 try/except 里继续
+重点是失败路径：fetch_matins / fetch_vigil 把部分 call() 包在 try/except 里继续
 往下调，若时间戳只在成功时更新，429 之后的下一个 tool 就会零间隔发出 —— 节流失效的
 时刻正是最需要它的时刻。这里用假时钟驱动，不睡真实时间、不触达网络。
 """
@@ -15,7 +15,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "cli"))
 
-import monastery  # noqa: E402  —— sys.path 注入之后才能 import
+import cathedral  # noqa: E402  —— sys.path 注入之后才能 import
 
 
 OK_BODY = json.dumps({"result": {"content": [{"text": '{"success": true}'}]}})
@@ -58,19 +58,19 @@ class ThrottleTest(unittest.TestCase):
 
     def setUp(self):
         self.clock = _FakeClock()
-        self._saved_time = monastery.time
+        self._saved_time = cathedral.time
         self._saved_urlopen = urllib.request.urlopen
-        self._saved_last = monastery._last_call_at
+        self._saved_last = cathedral._last_call_at
         self._saved_token = os.environ.get("MCD_MCP_TOKEN")
-        monastery.time = self.clock
-        monastery._last_call_at = 0.0
+        cathedral.time = self.clock
+        cathedral._last_call_at = 0.0
         os.environ["MCD_MCP_TOKEN"] = "dummy-token-for-tests"
         self.outcomes = []          # 每次 urlopen 的剧本：OK_BODY 字符串或异常实例
 
     def tearDown(self):
-        monastery.time = self._saved_time
+        cathedral.time = self._saved_time
         urllib.request.urlopen = self._saved_urlopen
-        monastery._last_call_at = self._saved_last
+        cathedral._last_call_at = self._saved_last
         if self._saved_token is None:
             os.environ.pop("MCD_MCP_TOKEN", None)
         else:
@@ -89,29 +89,29 @@ class ThrottleTest(unittest.TestCase):
 
     def test_back_to_back_calls_sleep_the_floor(self):
         self._wire([OK_BODY, OK_BODY])
-        monastery.call("now-time-info")
-        monastery.call("campaign-calendar")
-        self.assertEqual(self.clock.slept, [monastery.THROTTLE_S])
+        cathedral.call("now-time-info")
+        cathedral.call("campaign-calendar")
+        self.assertEqual(self.clock.slept, [cathedral.THROTTLE_S])
 
     def test_next_call_after_a_failure_still_sleeps_the_floor(self):
         """429 之后紧接的 tool 不许零间隔发出。"""
         self._wire([urllib.error.URLError("429 Too Many Requests"), OK_BODY])
         with self.assertRaises(urllib.error.URLError):
-            monastery.call("campaign-calendar")
-        monastery.call("available-coupons")
-        self.assertEqual(self.clock.slept, [monastery.THROTTLE_S])
+            cathedral.call("campaign-calendar")
+        cathedral.call("available-coupons")
+        self.assertEqual(self.clock.slept, [cathedral.THROTTLE_S])
 
     def test_failure_updates_the_timestamp(self):
         self._wire([urllib.error.URLError("boom")])
         with self.assertRaises(urllib.error.URLError):
-            monastery.call("query-my-account")
-        self.assertEqual(monastery._last_call_at, self.clock.time())
+            cathedral.call("query-my-account")
+        self.assertEqual(cathedral._last_call_at, self.clock.time())
 
     def test_no_sleep_when_the_gap_already_elapsed(self):
         self._wire([OK_BODY, OK_BODY])
-        monastery.call("order-list")
-        self.clock.tick(monastery.THROTTLE_S * 3)
-        monastery.call("list-nutrition-foods")
+        cathedral.call("order-list")
+        self.clock.tick(cathedral.THROTTLE_S * 3)
+        cathedral.call("list-nutrition-foods")
         self.assertEqual(self.clock.slept, [])
 
 

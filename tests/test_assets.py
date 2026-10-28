@@ -26,7 +26,7 @@ ALT_PUNCT = re.compile(r"""[\s:：;；,，.。、_\-/|()（）\[\]"']+""")
 
 NOT_IN_README = {"og-card.png", "og-bg.webp"}   # 社交卡走仓库设置上传，不嵌 README
 
-# 必须镂空透明底的徽记：五枚仪式圆徽 + 五级段位盾徽。
+# 必须镂空透明底的徽记：五枚日课圆徽 + 五级阶位盾徽。
 # 不透明米白方底在 GitHub 亮色模式下会给每枚徽记镶一圈米白方边，
 # 暗色模式下直接变成深色页面上的米白瓷砖 —— 这条断言把镂空结果锁住，
 # 以后重跑 tools/gen_assets.py 漏了镂空步骤，这里就会红。
@@ -38,11 +38,21 @@ IMAGE_SUFFIXES = (".webp", ".png", ".jpg", ".jpeg", ".gif")
 VAGUE_ALTS = {"logo", "image", "img", "icon", "banner",
               "图", "图片", "横幅", "徽章", "hero"}
 
-RITUALS = ("morning", "blessing", "inventory", "transcend", "merit")
-RITUAL_NAMES = ("晨课", "领福", "圣物盘点", "超度", "功德簿")
-RANK_NAMES = ("见习麦门徒", "麦门侍僧", "薯条骑士", "巨无霸主教", "麦门大祭司")
+RITUALS = ("matins", "grace", "relics", "vigil", "ledger")
+RITUAL_NAMES = ("晨祷", "领恩", "圣物盘点", "守夜", "奉献录")
+RANK_NAMES = ("望教者", "麦门侍者", "薯条骑士", "巨无霸主教", "麦门大祭司")
 RANK_RANGES = ("< 200", "200 ~ 999", "1000 ~ 4999", "5000 ~ 19999", "≥ 20000")
 KEY_TOOLS = ("now-time-info", "auto-bind-coupons", "query-my-coupons", "order-list")
+
+# 参赛必需内容的四要素标题。改名会动「为什么是…」这一行，而四要素是硬约束，
+# 所以给它一条机械判据：缺一即红。
+CONTEST_HEADINGS = (
+    r"^#\s+麦门大教堂",          # 项目介绍（标题区）
+    r"^##\s+.*为什么是大教堂",   # 项目介绍（立意段）
+    r"^##\s+.*安装",             # 安装方法
+    r"^##\s+.*使用示例",         # 使用示例
+    r"^##\s+.*目标用户",         # 目标用户
+)
 
 
 def read_readme():
@@ -143,7 +153,7 @@ class AssetAlphaTest(unittest.TestCase):
     def test_cutout_set_is_complete(self):
         names = self.cutout_assets()
         self.assertEqual(len(names), ALPHA_REQUIRED_COUNT,
-                         "需要镂空的徽记应为 %d 枚（五仪式圆徽 + 五级段位盾徽），"
+                         "需要镂空的徽记应为 %d 枚（五日课圆徽 + 五级阶位盾徽），"
                          "实际 %d 枚：%s" % (ALPHA_REQUIRED_COUNT, len(names), names))
 
     def test_cutout_assets_have_alpha_channel(self):
@@ -200,29 +210,45 @@ class ImgAltTest(unittest.TestCase):
 
 
 class TextFallbackTest(unittest.TestCase):
-    """关键信息不得只存在于图里：仪式、命令、Tool、段位都要有文字版本。"""
+    """关键信息不得只存在于图里：日课、命令、Tool、阶位都要有文字版本。"""
 
     def setUp(self):
         self.text = read_readme()
 
     def test_every_ritual_command_is_text(self):
         for name in RITUALS:
-            cmd = "python cli/monastery.py %s" % name
-            self.assertIn(cmd, self.text, "仪式命令没有文字版本：%s" % cmd)
+            cmd = "python cli/cathedral.py %s" % name
+            self.assertIn(cmd, self.text, "日课命令没有文字版本：%s" % cmd)
 
     def test_every_ritual_name_is_text(self):
         for name in RITUAL_NAMES:
-            self.assertIn(name, self.text, "仪式名没有文字版本：%s" % name)
+            self.assertIn(name, self.text, "日课名没有文字版本：%s" % name)
 
     def test_every_rank_name_and_range_is_text(self):
         for name in RANK_NAMES:
             self.assertIn(name, self.text, "等级名没有文字版本：%s" % name)
         for rng in RANK_RANGES:
-            self.assertIn(rng, self.text, "功德区间没有文字版本：%s" % rng)
+            self.assertIn(rng, self.text, "奉献值区间没有文字版本：%s" % rng)
 
     def test_key_tools_are_text(self):
         for tool in KEY_TOOLS:
             self.assertIn(tool, self.text, "Tool 名没有文字版本：%s" % tool)
+
+
+class ContestElementsTest(unittest.TestCase):
+    """参赛必需内容的四要素标题必须齐备：项目介绍、安装方法、使用示例、目标用户。
+
+    独立成一个 TestCase 而不是塞进 TextFallbackTest：这样改造中途的预期红名单
+    能按类名点到它。
+    """
+
+    def test_contest_four_elements_are_present(self):
+        text = read_readme()
+        self.assertEqual(len(CONTEST_HEADINGS), 5)
+        for pattern in CONTEST_HEADINGS:
+            with self.subTest(heading=pattern):
+                self.assertRegex(text, re.compile(pattern, re.M),
+                                 "参赛四要素标题缺失：%s" % pattern)
 
 
 class HtmlCellTest(unittest.TestCase):

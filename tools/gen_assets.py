@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""麦门修道院 · 视觉资产生成器（构建期工具，非运行时依赖）
+"""麦门大教堂 · 视觉资产生成器（构建期工具，非运行时依赖）
 
 ================================================================================
 这个脚本不是跑 CLI 所必需的。`cli/` 与 `tests/` 永不 import 它。
-修道院 CLI 本身零依赖、纯标准库；本工具额外需要 Pillow，且需要一个图像生成
+大教堂 CLI 本身零依赖、纯标准库；本工具额外需要 Pillow，且需要一个图像生成
 网关的凭证。资产已生成并提交在 assets/ 下，使用者无需运行本脚本。
 ================================================================================
 
@@ -44,7 +44,7 @@ try:
 except ImportError:  # pragma: no cover - 构建期工具，缺库时给出明确指引
     sys.stderr.write(
         "需要 Pillow：pip install Pillow\n"
-        "（这是构建期工具的依赖，修道院 CLI 本身零依赖）\n"
+        "（这是构建期工具的依赖，大教堂 CLI 本身零依赖）\n"
     )
     raise SystemExit(2)
 
@@ -57,22 +57,33 @@ MODEL = os.environ.get("AI_IMAGE_MODEL", "gpt-image-2")
 
 WEBP_QUALITY = 88
 
-# 横幅裁切窗口的上边位置，占可裁余量的比例。
-# 0.24 是实测校准值：再小会在屋脊上方留出过多空白天空，
-# 再大就会切掉底部那条绛红矮墙带（全图唯一的绛红色块）。
-HERO_TOP_BIAS = 0.24
+# 通栏图裁切时在主体上方留出的空白高度，占窗口高度的比例。
+# 不再使用手调的绝对偏移量：那种做法换一张图就失效 —— 实测过一次，
+# 按东方寺庙版校准出来的偏移量，换成哥特教堂版后顶部空出大片天空、
+# 底部却把拱基切掉了。现在改为按内容自动取景（见 _content_top）。
+BANNER_HEADROOM = 0.03
+
+# 判定「这一行有内容」的阈值：与背景色的曼哈顿距离，以及非背景像素占比。
+CONTENT_TOLERANCE = 45
+CONTENT_MIN_DENSITY = 0.02
+CONTENT_SAMPLE_STEP = 4
 
 # ── 统一视觉语言 ──────────────────────────────────────────────────────────
 # 每个 prompt 都会拼上这段。改这里等于整套资产换皮，不会出现半新半旧。
 STYLE = (
     "Flat vector illustration, minimal geometric construction, bold clean silhouettes. "
     "Strict three-colour palette: warm golden yellow, deep crimson red, soft cream. "
+    "Gothic cathedral architecture: pointed lancet arches, circular rose window tracery, "
+    "ribbed stone vaulting, leaded stained-glass panels, candlelight. "
     "Subtle carved-stone texture, matte finish, soft even ambient light, "
     "no gradients beyond gentle shading. "
-    "Symmetrical centered composition with generous negative space. "
-    "Eastern temple sacred-geometry motif, serene and reverent mood. "
+    "Symmetrical centered composition with generous negative space, solemn reverent mood. "
     "ABSOLUTELY NO text, no letters, no numbers, no calligraphy, no logos, "
-    "no brand marks, no trademarks, no human faces, no photorealism, no 3D render."
+    "no brand marks, no trademarks, no human faces, no photorealism, no 3D render. "
+    # 刻意排除真实宗教符号：本项目是建筑美学意义上的「教堂」，
+    # 不做任何具体信仰的礼仪戏仿。
+    "ABSOLUTELY NO crosses, no crucifixes, no saints, no icons, "
+    "no symbols of any real-world religion."
 )
 
 # 三种框型。同一套 STYLE 下用框型区分资产类别。
@@ -80,83 +91,89 @@ FRAME_BANNER = (
     "Wide horizontal banner composition, panoramic, the subject centered and "
     "symmetrical, cream sky, deep crimson ground band. "
 )
+# 环宽与越界约束固化在框型里，不再依赖单张 prompt 补救。
+# 教训：上一版只在框型里写了「thin golden ring」，结果其中一枚出了明显的
+# 重边、云纹越出环外、底色还带放射线肌理，并排时脱开家族，得单独重出一次。
 FRAME_MEDALLION = (
-    "Single centered object inside a circular medallion framed by a thin golden ring, "
-    "deep crimson field behind the object, cream outside the ring. "
+    "Single centered object inside a circular medallion. The ring frame must be a thin "
+    "plain hairline of uniform width, exactly like a simple drawn circle. Nothing may "
+    "extend beyond or overlap the ring. The field behind the object is flat plain deep "
+    "crimson with no radiating lines and no texture pattern. Cream outside the ring. "
 )
 FRAME_BADGE = (
     "Heraldic shield-shaped badge medallion, thin golden border, deep crimson field, "
     "single centered emblem, cream background outside the shield. "
 )
 
-GATEWAY_SUBJECT = (
-    "A stone temple gateway on a stepped platform, its twin tall rounded arches "
-    "echoing the shape of a letter M without ever drawing a letter, "
-    "a small finial on the roof ridge, thin incense smoke curling upward on both sides."
+CATHEDRAL_SUBJECT = (
+    "A stone cathedral facade on a stepped platform, its twin tall pointed lancet "
+    "arches echoing the shape of a letter M without ever drawing a letter, "
+    "a large circular rose window with radiating stone tracery set above and between "
+    "the two arches, a slender spire on the roof ridge, "
+    "a lit candle sconce glowing on either side."
 )
 
 # ── 资产清单 ──────────────────────────────────────────────────────────────
 # (名称, 生成尺寸, 目标展示尺寸, 框型, 主体描述)
 MANIFEST = [
     # 门面横幅。
-    # 裁成 1280×660 而非原生 3:2：满宽铺开时 3:2 在 GitHub 正文宽度下约占
+    # 裁成 1280×740 而非原生 3:2：满宽铺开时 3:2 在 GitHub 正文宽度下约占
     # 600px 高，会把 tagline、badge 和对评委最关键的 `--demo` 钩子命令挤到
-    # 折叠线以下。裁后高度约 460px，既保留满宽冲击力又把钩子留在第一屏。
-    # 裁切窗口经过实测校准（见 HERO_TOP_BIAS）：上边留住屋脊尖顶，
-    # 下边必须留住那条绛红矮墙带 —— 它是与徽记家族呼应的唯一绛红色块，
-    # 切掉后整张图只剩金与米白，与五仪式徽记脱开了。
-    ("hero", "1536x1024", (1280, 660), FRAME_BANNER, GATEWAY_SUBJECT),
+    # 折叠线以下。裁后渲染高度约 520px。
+    # 高度不能再压：实测哥特立面从尖塔顶到基座底跨 856px（原图 1024 高），
+    # 660 的窗口只给 792px，装不下，必然要切塔尖或切拱基 —— 都破了「M」形。
+    # 740 对应窗口 888px，刚好把整座立面连基座一起装进去。
+    # 垂直位置由 _content_top 自动取景，不写死偏移量。
+    ("hero", "1536x1024", (1280, 740), FRAME_BANNER, CATHEDRAL_SUBJECT),
 
-    # 五大仪式徽记
-    ("ritual-morning", "1024x1024", (360, 360), FRAME_MEDALLION,
-     "A sunrise disc rising behind a single temple arch, three thin radiating light "
-     "beams above it, a small bell hanging under the arch."),
-    # 注：首版的金环明显粗于另四枚，云纹越出环外，绛红底还带放射线肌理，
-    # 并排时是五枚圆徽里唯一的「重边」，脱开了家族。故显式压住环宽与越界。
-    ("ritual-blessing", "1024x1024", (360, 360), FRAME_MEDALLION,
-     "A wide alms bowl on a small pedestal, three round coin-like discs floating in "
-     "an arc above the bowl. The circular ring frame must be a thin plain hairline of "
-     "uniform width, exactly like a simple drawn circle. Nothing may extend beyond or "
-     "overlap the ring. The crimson field is flat and plain with no radiating lines "
-     "and no texture pattern."),
-    ("ritual-inventory", "1024x1024", (360, 360), FRAME_MEDALLION,
-     "A tiered stone shelf holding small rolled scroll cases, a short stack of round "
-     "coin-like discs beside them, a single row of abacus beads below."),
-    ("ritual-transcend", "1024x1024", (360, 360), FRAME_MEDALLION,
-     "An hourglass standing before a temple arch, a few grains falling inside it, "
-     "a lotus flower at its base, one small flame above."),
-    # 注：首版的石板画得过大且偏浅色，破了「金器落在绛红底」的family规律，
-    # 故强调 small / golden / deep crimson field 重出。
-    ("ritual-merit", "1024x1024", (360, 360), FRAME_MEDALLION,
-     "A small golden open ledger tablet with a few rows of carved tally marks, "
-     "a slender golden brush resting diagonally across it, a tiny square seal block "
-     "beside it. The tablet is golden, compact, and sits on a large deep crimson field "
-     "with plenty of crimson space around it."),
+    # 五大日课徽记。环宽与越界约束已固化在 FRAME_MEDALLION 里，
+    # 各条主体描述不再重复交代，只写画什么。
+    ("ritual-matins", "1024x1024", (360, 360), FRAME_MEDALLION,
+     "A sunrise disc seen through a large circular rose window, three thin radiating "
+     "light beams above it, a small bell hanging below the window."),
+    ("ritual-grace", "1024x1024", (360, 360), FRAME_MEDALLION,
+     "A wide shallow offering bowl on a small stone pedestal, three round coin-like "
+     "discs floating in an arc above the bowl."),
+    ("ritual-relics", "1024x1024", (360, 360), FRAME_MEDALLION,
+     "A tiered stone niche holding three small reliquary caskets, a short stack of "
+     "round coin-like discs beside them, a single row of short candle stubs below."),
+    ("ritual-vigil", "1024x1024", (360, 360), FRAME_MEDALLION,
+     "A tall lit candle standing beside an hourglass, both under a pointed lancet "
+     "arch, a few grains falling inside the hourglass, melted wax pooling at the base."),
+    # 教训沿用：东方版的册页首版画得过大且偏浅色，破了「金器落在绛红底」的
+    # 家族规律，得单独重出一次。故此处显式强调 small / golden / 大片绛红留白。
+    ("ritual-ledger", "1024x1024", (360, 360), FRAME_MEDALLION,
+     "A small golden open ledger book resting on a stone lectern, a few rows of carved "
+     "tally marks on its pages, a slender golden quill laid diagonally across it, "
+     "a tiny wax seal beside it. The book is golden, compact, and sits on a large deep "
+     "crimson field with plenty of crimson space around it."),
 
-    # 五级修行徽章
-    ("badge-1-novice", "1024x1024", (200, 200), FRAME_BADGE,
-     "A single small seedling sprout with two leaves standing under a simple plain arch."),
+    # 五级段位盾徽。由低到高逐级更繁复，这是晒图动机的来源。
+    ("badge-1-catechumen", "1024x1024", (200, 200), FRAME_BADGE,
+     "A single slender lit candle standing under a plain pointed lancet arch."),
     ("badge-2-acolyte", "1024x1024", (200, 200), FRAME_BADGE,
-     "A small alms bowl with one slender vertical baton behind it, a plain arch above."),
+     "A small offering bowl with one tall slender candle behind it, "
+     "a plain pointed lancet arch above."),
     ("badge-3-knight", "1024x1024", (200, 200), FRAME_BADGE,
-     "Two crossed slender golden batons, a small temple arch above them, "
+     "Two crossed slender golden batons, a small pointed lancet arch above them, "
      "three dots in a row beneath."),
     ("badge-4-bishop", "1024x1024", (200, 200), FRAME_BADGE,
-     "A tall stack of three round tiered discs forming a tower, crowned by a "
-     "pointed ceremonial arch, two small side pillars."),
+     "A tall stack of three round tiered discs forming a tower, crowned by a tall "
+     "pointed mitre-like arch, two slender side pinnacles."),
     ("badge-5-highpriest", "1024x1024", (200, 200), FRAME_BADGE,
-     "A radiant sun disc with long aura rays above twin ornate arches, "
-     "ornate filigree border, the most elaborate emblem of the set."),
+     "A radiant sun disc with long aura rays above a large circular rose window "
+     "flanked by twin pointed lancet arches, ornate Gothic tracery border, "
+     "the most elaborate emblem of the set."),
 
     # OG 社交卡背景：下三分之一留白给 Pillow 合成文字
     ("og-bg", "1536x1024", (1280, 640), FRAME_BANNER,
-     GATEWAY_SUBJECT + " The lower third of the image is a large empty calm cream "
+     CATHEDRAL_SUBJECT + " The lower third of the image is a large empty calm cream "
      "area with nothing in it, reserved as blank space."),
 ]
 
 # OG 卡文案（由 Pillow 绘制，不交给图像模型）
-OG_TITLE = "麦门修道院"
-OG_LATIN = "MCD  MONASTERY"
+OG_TITLE = "麦门大教堂"
+OG_LATIN = "MCD  CATHEDRAL"
 OG_TAGLINE = "每天 30 秒，替你抢救正在过期的券和积分"
 
 CJK_FONT_CANDIDATES = [
@@ -231,9 +248,9 @@ def generate(name, size, frame, subject, key):
 # 起因：不透明米白方底在 GitHub 亮色模式下给每枚徽记加一圈米白方边，
 # 在暗色模式下直接变成深色页面上的米白瓷砖。横幅与 OG 卡是整幅构图，不镂空。
 ALPHA_CUTOUT = {
-    "ritual-morning", "ritual-blessing", "ritual-inventory",
-    "ritual-transcend", "ritual-merit",
-    "badge-1-novice", "badge-2-acolyte", "badge-3-knight",
+    "ritual-matins", "ritual-grace", "ritual-relics",
+    "ritual-vigil", "ritual-ledger",
+    "badge-1-catechumen", "badge-2-acolyte", "badge-3-knight",
     "badge-4-bishop", "badge-5-highpriest",
 }
 
@@ -276,9 +293,7 @@ def optimize(name, target):
     """
     src = os.path.join(RAW, name + ".png")
     im = Image.open(src).convert("RGB")
-    if name == "hero":
-        im = _crop_to_ratio(im, target[0] / float(target[1]), HERO_TOP_BIAS)
-    elif name == "og-bg":
+    if name in ("hero", "og-bg"):
         im = _crop_to_ratio(im, target[0] / float(target[1]))
     if name in ALPHA_CUTOUT:
         im = _cutout_alpha(im)
@@ -288,11 +303,40 @@ def optimize(name, target):
     return os.path.getsize(out)
 
 
-def _crop_to_ratio(im, ratio, top_bias=0.15):
-    """裁到指定长宽比。
+def _content_top(im):
+    """返回第一行「有内容」的 y 坐标，背景色取左上角像素。
 
-    竖向裁切时偏向保留上部：山门的屋脊与双拱是「M」形的识别点，
-    底部锚定会把它们切掉，实测过一次。top_bias 为从顶部让出的余量占比。
+    用来替代手调的裁切偏移量。主体在画面里的垂直位置每次生成都不一样，
+    写死偏移量必然在换图后切错地方。
+    """
+    rgb = im.convert("RGB")
+    px = rgb.load()
+    w, h = rgb.size
+    bg = px[2, 2]
+    cols = range(0, w, CONTENT_SAMPLE_STEP)
+    need = len(cols) * CONTENT_MIN_DENSITY
+    for y in range(0, h, CONTENT_SAMPLE_STEP):
+        n = 0
+        for x in cols:
+            r, g, b = px[x, y]
+            if abs(r - bg[0]) + abs(g - bg[1]) + abs(b - bg[2]) > CONTENT_TOLERANCE:
+                n += 1
+                if n > need:
+                    return y
+    return 0
+
+
+def _crop_to_ratio(im, ratio):
+    """裁到指定长宽比，竖向按内容取景。
+
+    正常情况下把主体顶部连同一小段空白一起框进来。窗口装不下全部内容时
+    （实测哥特立面含细塔尖跨约 970px，而 1280×740 的窗口只有 888px），
+    下面那行 min() 会把窗口夹成底部对齐，于是**优先保住基座**，
+    细塔尖允许出框 —— 通栏横幅里主体顶端出框是可接受的构图，
+    而基座被切断会让整座建筑显得悬空。
+
+    注意这条优先级是 min() 夹取的结果，不是额外判断。改动夹取逻辑
+    会连带改变「装不下时保哪头」的行为。
     """
     w, h = im.size
     if w / float(h) > ratio:
@@ -300,7 +344,8 @@ def _crop_to_ratio(im, ratio, top_bias=0.15):
         left = (w - new_w) // 2
         return im.crop((left, 0, left + new_w, h))
     new_h = int(w / ratio)
-    top = int((h - new_h) * top_bias)
+    top = _content_top(im) - int(new_h * BANNER_HEADROOM)
+    top = max(0, min(top, h - new_h))
     return im.crop((0, top, w, top + new_h))
 
 
@@ -325,7 +370,7 @@ def build_og_card():
     im = _crop_to_ratio(im, 1280 / 640.0).resize((1280, 640), Image.LANCZOS)
 
     draw = ImageDraw.Draw(im, "RGBA")
-    # 底部压一条米白带承载文字。带高控制在 204px：再高就会吃掉山门的双拱，
+    # 底部压一条米白带承载文字。带高控制在 204px：再高就会吃掉教堂立面的双尖拱，
     # 而双拱正是「M」形的识别点。
     draw.rectangle([(0, 436), (1280, 640)], fill=CREAM + (242,))
     draw.line([(0, 436), (1280, 436)], fill=GOLD, width=3)
@@ -352,7 +397,7 @@ def build_og_card():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="生成麦门修道院视觉资产")
+    ap = argparse.ArgumentParser(description="生成麦门大教堂视觉资产")
     ap.add_argument("--force", action="store_true", help="已存在也重新生成")
     ap.add_argument("--only", metavar="NAME", help="只处理指定资产")
     ap.add_argument("--optimize-only", action="store_true",

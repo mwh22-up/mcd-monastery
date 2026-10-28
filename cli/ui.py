@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-麦门修道院 · 统一渲染层
+麦门大教堂 · 统一渲染层
 中文显示宽度对齐地基 + 麦当劳金红语义调色板 + 全部版面组件。仅用标准库，3.8+ 可跑。
 
 契约（改这个文件前先读）：
@@ -29,12 +29,12 @@ PAD_X = 1     # 框内左右内边距
 # 「ambiguous 按宽」的终端下，把这里改成 True 即可整体切换。
 AMBIGUOUS_AS_WIDE = False
 
-H = dict(tl="┏", tr="┓", bl="┗", br="┛", h="━", v="┃")  # 重线：牌匾 / 往生碑 / 横幅
+H = dict(tl="┏", tr="┓", bl="┗", br="┛", h="━", v="┃")  # 重线：牌匾 / 安息名录碑 / 横幅
 L = dict(tl="┌", tr="┐", bl="└", br="┘", h="─", v="│")  # 细线：内容框 / 分隔线
 BAR_FULL = "█"
 BAR_EMPTY = "░"
 TRUNC_MARK = ".."   # D9：… 是 ambiguous 宽度，又恰好落在行尾最敏感处，故用 ASCII
-TOMB_INSET = 6      # 往生碑左右各内缩的列数，使碑窄于卡片、自成一片版面
+TOMB_INSET = 6      # 安息名录碑左右各内缩的列数，使碑窄于卡片、自成一片版面
 
 # ─────────────────────────── 宽度地基 ───────────────────────────
 
@@ -44,6 +44,11 @@ _WS_RE = re.compile(r"\s+")
 
 # D1：自维护区间表，不用 unicodedata.east_asian_width —— 后者的 Unicode 数据版本
 # 随 Python 版本漂移，会让 3.8 与 3.13 上的对齐结果不一致。区间按码位升序排列。
+#
+# 已知边界（实测，暂不覆盖）：U+A960 朝鲜文字母扩展 A、U+1B000 假名补充、
+# U+17000 西夏文在终端按 2 列渲染，本表按 1 列计，会各差 1~2 列。
+# 这三块不可能出现在麦当劳中国的营销文案里，故不进表 —— 进表要付的代价是
+# 每加一个区间都要同步 _AMBIGUOUS_RANGES 的语义边界并重跑全部宽度用例。
 _WIDE_RANGES = (
     (0x1100, 0x115F),      # 朝鲜文字母
     (0x2E80, 0x303E),      # CJK 部首补充 / 康熙部首 / CJK 符号标点
@@ -94,6 +99,11 @@ def _in_ranges(cp, ranges):
 
 
 def _char_width(cp):
+    # 组合附加符号不占列（é 的 NFD 形式 e + U+0301 是 macOS 来源文本的默认形态）。
+    # 跳过必须放在这里而不是 disp_width：trunc() 自己的循环也直接调 _char_width，
+    # 规则加在上层会让两条算宽路径分叉。
+    if unicodedata.combining(chr(cp)):
+        return 0
     if AMBIGUOUS_AS_WIDE and _in_ranges(cp, _AMBIGUOUS_RANGES):
         return 2
     return 2 if _in_ranges(cp, _WIDE_RANGES) else 1
@@ -156,13 +166,18 @@ def pad(s, width, align="left"):
 
 
 def safe_text(s):
-    """净化 MCP 来源字符串（D3）：数学字形逐字符 NFKC、剔除 emoji/变体选择符/零宽、折叠空白。
+    """净化 MCP 来源字符串（D3）：整串 NFC、数学字形逐字符 NFKC、剔除 emoji/变体选择符/零宽、折叠空白。
 
     只给上游数据用；项目自己的中文字面量不要过这里。整串 NFKC 会把（）「」压成半角，
     所以只对 U+1D400–1D7FF 块逐字符规范化。
+
+    整串这一次必须是 NFC，不能是 NFKC：NFC 把 e + U+0301 合成 é（宽度回到 1 列），
+    而数学字形块 U+1D400–1D7FF 在 NFC 下不分解，所以 𝟗 → 9 仍由下面的逐字符
+    NFKC 负责，两者顺序不冲突。
     """
     if not s:
         return ""
+    s = unicodedata.normalize("NFC", s)
     buf = []
     for ch in s:
         cp = ord(ch)
@@ -353,7 +368,7 @@ def bar(value, maxv, width=10, color=None):
 
 
 def tomb(lines, epitaph=""):
-    """往生碑：重线窄框 + 碑文居中，左右各内缩 TOMB_INSET 列，自成一片版面。"""
+    """安息名录碑：重线窄框 + 碑文居中，左右各内缩 TOMB_INSET 列，自成一片版面。"""
     width = CARD_W - 2 * TOMB_INSET
     box = [_edge(H, "top", width, C.DIM)]
     for line in lines:
@@ -366,7 +381,7 @@ def tomb(lines, epitaph=""):
 
 
 def seal(text):
-    """右下朱印落款：单行红色右对齐到 CARD_W。"""
+    """右下蜡封落款：单行红色右对齐到 CARD_W。"""
     return [pad(C.paint(text, C.RED), CARD_W, "right")]
 
 

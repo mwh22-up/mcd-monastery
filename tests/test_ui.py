@@ -22,6 +22,12 @@ def _read_ui_src():
         return f.read()
 
 
+def _import_roots(src):
+    """源码里所有 import 的顶层模块名（urllib.request → urllib）。"""
+    return set(m.split(".")[0]
+               for m in re.findall(r"^(?:import|from)\s+([a-zA-Z_][\w.]*)", src, re.M))
+
+
 class DispWidthTest(unittest.TestCase):
 
     def test_empty(self):
@@ -31,7 +37,7 @@ class DispWidthTest(unittest.TestCase):
         self.assertEqual(ui.disp_width("abc 9.9"), 7)
 
     def test_pure_cjk(self):
-        self.assertEqual(ui.disp_width("麦门修道院"), 10)
+        self.assertEqual(ui.disp_width("麦门大教堂"), 10)
 
     def test_mixed(self):
         self.assertEqual(ui.disp_width("麦门 9.9"), 8)
@@ -91,24 +97,24 @@ class PadTest(unittest.TestCase):
 class TruncTest(unittest.TestCase):
 
     def test_exact_width_untouched(self):
-        self.assertEqual(ui.trunc("麦门修道院", 10), "麦门修道院")
+        self.assertEqual(ui.trunc("麦门大教堂", 10), "麦门大教堂")
 
     def test_shorter_untouched(self):
         self.assertEqual(ui.trunc("麦门", 10), "麦门")
 
     def test_one_column_over(self):
-        got = ui.trunc("麦门修道院", 9)
+        got = ui.trunc("麦门大教堂", 9)
         self.assertEqual(ui.disp_width(got), 9)
         self.assertTrue(got.endswith(ui.TRUNC_MARK))
 
     def test_cjk_cut_in_half_still_exact(self):
         # 预算只剩 1 列、下一个字要 2 列：补一个空格，总宽仍然精确
         for width in range(3, 12):
-            got = ui.trunc("麦门修道院麦门修道院", width)
+            got = ui.trunc("麦门大教堂麦门大教堂", width)
             self.assertEqual(ui.disp_width(got), width, repr(got))
 
     def test_mark_is_ascii(self):
-        got = ui.trunc("麦门修道院", 6)
+        got = ui.trunc("麦门大教堂", 6)
         self.assertNotIn("…", got)
         self.assertIn("..", got)
 
@@ -144,7 +150,7 @@ class SafeTextTest(unittest.TestCase):
         self.assertEqual(ui.safe_text("麦\u200b门\u200d修"), "麦门修")
 
     def test_whitespace_folded(self):
-        self.assertEqual(ui.safe_text("  麦门\n\n 修道院  "), "麦门 修道院")
+        self.assertEqual(ui.safe_text("  麦门\n\n 大教堂  "), "麦门 大教堂")
 
     def test_fullwidth_punctuation_preserved(self):
         # 只对数学字形块逐字符 NFKC，整串 NFKC 会把这些压成半角
@@ -156,6 +162,21 @@ class SafeTextTest(unittest.TestCase):
     def test_keeps_width_safe(self):
         raw = "超值𝟗.𝟗元早餐两件套陪你开工啦😋"
         self.assertEqual(ui.disp_width(ui.safe_text(raw)), 29)
+
+    def test_combining_mark_is_normalized(self):
+        """e + U+0301 的 NFD 形式必须和单码位 é 等宽（报告 L3）。
+
+        麦咖啡活动标题出现 Café 完全可能，而 macOS 来源文本默认就是 NFD 形态。
+        改之前 ui 认为它 8 列、终端渲染 7 列，框线就差一格。
+        """
+        self.assertEqual(ui.disp_width(ui.safe_text("cafe\u0301 券")),
+                         ui.disp_width("café 券"))
+        for line in ui.panel("标签", [ui.safe_text("cafe\u0301 券")]):
+            self.assertEqual(ui.disp_width(line), ui.CARD_W, repr(line))
+
+    def test_trunc_agrees_with_disp_width_on_combining_marks(self):
+        """两条算宽路径必须同口径：trunc 自己的循环也直接调 _char_width。"""
+        self.assertEqual(ui.disp_width(ui.trunc("cafe\u0301 券券券券券券", 10)), 10)
 
 
 class BarTest(unittest.TestCase):
@@ -240,7 +261,7 @@ class PaletteTest(unittest.TestCase):
 
     def test_components_are_colorless_after_degrade(self):
         ui.C.disable()
-        rendered = "\n".join(ui.plaque("麦门", "副标题") + ui.seal("【朱印】") + ui.divider())
+        rendered = "\n".join(ui.plaque("麦门", "副标题") + ui.seal("【蜡封】") + ui.divider())
         self.assertNotIn("\x1b", rendered)
 
 
@@ -252,25 +273,25 @@ class ComponentWidthTest(unittest.TestCase):
                                   ui.bar(0, 7, 10, ui.C.RED),
                                   ui.pad("剩 0 天", 8, "right"))
         return {
-            "plaque": ui.plaque("麦门修道院 · 晨课", "2026-10-10 星期六"),
-            "plaque_no_subtitle": ui.plaque("麦门修道院 · 领福"),
+            "plaque": ui.plaque("麦门大教堂 · 晨祷", "2026-10-10 星期六"),
+            "plaque_no_subtitle": ui.plaque("麦门大教堂 · 领恩"),
             "plaque_overwide": ui.plaque("麦" * 40, "门" * 40),
-            "panel": ui.panel("今日机缘", ["超值9.9元早餐两件套陪你开工啦",
+            "panel": ui.panel("今日布告", ["超值9.9元早餐两件套陪你开工啦",
                                             "麦当劳 X PEACEMINUSONE"]),
-            "panel_no_title": ui.panel("", ["在持 27 张，其中 12 张七日内魂飞魄散"]),
+            "panel_no_title": ui.panel("", ["在持 27 张，其中 12 张七日内烛火熄灭"]),
             "panel_overwide": ui.panel("长内容", ["麦" * 60]),
-            "panel_str_arg": ui.panel("单行", "施主福缘已满，今日无可领之福。"),
+            "panel_str_arg": ui.panel("单行", "信徒的恩惠已领尽，今日无可领之券。"),
             "panel_colored": ui.panel("临期", [countdown], ui.C.RED),
-            "panel_nested_bullet": ui.panel("今日机缘", ui.bullet(["超值9.9元早餐两件套",
+            "panel_nested_bullet": ui.panel("今日布告", ui.bullet(["超值9.9元早餐两件套",
                                                                    "麦当劳 X PEACEMINUSONE"])),
             "panel_nested_kv": ui.panel("积分", ui.kv_table([("可用", "1483 分"),
                                                               ("累计", "3465.8 分"),
-                                                              ("下月圆寂", "0 分")])),
-            "kv_table": ui.kv_table([("修行等级", "薯条骑士（功德 2709 点）"),
-                                     ("修行足迹", "10 次朝圣，累计布施 220.9 元"),
-                                     ("常驻道场", "南京徐庄路快捷小站（6 次）")]),
+                                                              ("下月熄灭", "0 分")])),
+            "kv_table": ui.kv_table([("奉献阶位", "薯条骑士（奉献值 2709 点）"),
+                                     ("奉献足迹", "10 次朝圣，累计奉献 220.9 元"),
+                                     ("常驻堂区", "南京徐庄路快捷小站（6 次）")]),
             "kv_table_fixed_key_w": ui.kv_table([("可用", "1483 分")], key_w=12),
-            "seal": ui.seal("【薯条骑士 · 功德 2709】"),
+            "seal": ui.seal("【薯条骑士 · 奉献值 2709】"),
             "rule": ui.rule(),
             "divider": ui.divider(),
             "banner": ui.banner("演示模式 · DEMO",
@@ -288,12 +309,12 @@ class ComponentWidthTest(unittest.TestCase):
 
     def test_nesting_does_not_truncate(self):
         # 整宽组件塞进 panel 时，行尾填充空格被剥掉，不该触发 '..' 截断
-        nested = ui.panel("积分", ui.kv_table([("可用", "1483 分"), ("下月圆寂", "0 分")]))
+        nested = ui.panel("积分", ui.kv_table([("可用", "1483 分"), ("下月熄灭", "0 分")]))
         self.assertNotIn(ui.TRUNC_MARK, "\n".join(nested))
 
     def test_tomb_is_self_consistent_and_narrower(self):
-        block = ui.tomb(["往 生 功 德 碑", "1572.8 积分", "卒于无人问津之日"],
-                        epitaph="超度来晚了，便是来迟了一生。")
+        block = ui.tomb(["安 息 名 录", "1572.8 积分", "卒于无人问津之日"],
+                        epitaph="守夜来晚了，便是来迟了一生。")
         widths = set(ui.disp_width(line) for line in block)
         self.assertEqual(len(widths), 1, widths)
         self.assertLessEqual(widths.pop(), ui.CARD_W)
@@ -304,7 +325,7 @@ class ComponentWidthTest(unittest.TestCase):
 
     def test_components_return_lists(self):
         self.assertIsInstance(ui.plaque("麦门"), list)
-        self.assertIsInstance(ui.seal("【朱印】"), list)
+        self.assertIsInstance(ui.seal("【蜡封】"), list)
         self.assertIsInstance(ui.rule(), list)
 
 
@@ -314,7 +335,7 @@ class FrameDisciplineTest(unittest.TestCase):
     def test_heavy_only(self):
         heavy_blocks = (ui.plaque("麦门", "副标题"),
                         ui.banner("演示模式", "快照"),
-                        ui.tomb(["往生"], epitaph="碑文"))
+                        ui.tomb(["安息"], epitaph="碑文"))
         for block in heavy_blocks:
             text = "".join(block)
             self.assertFalse(set(text) & LIGHT_CHARS, text)
@@ -326,7 +347,7 @@ class FrameDisciplineTest(unittest.TestCase):
 
     def test_cells_carry_no_emoji(self):
         # 框内单元格只放 ASCII+CJK：emoji 必须由调用方过 safe_text 后再进框
-        block = ui.panel("今日机缘", ui.bullet([ui.safe_text("超值𝟗.𝟗元早餐两件套陪你开工啦😋")]))
+        block = ui.panel("今日布告", ui.bullet([ui.safe_text("超值𝟗.𝟗元早餐两件套陪你开工啦😋")]))
         self.assertNotIn("😋", "".join(block))
 
 
@@ -350,10 +371,25 @@ class SourceDisciplineTest(unittest.TestCase):
     def test_card_width_is_written_once(self):
         self.assertEqual(len(re.findall(r"(?<![\w.])%d(?![\w.])" % ui.CARD_W, self.src)), 1)
 
-    @unittest.skipUnless(hasattr(sys, "stdlib_module_names"), "需要 Python 3.10+ 的标准库清单")
+    # ui.py 允许出现的标准库顶层模块。显式白名单而不是 sys.stdlib_module_names：
+    # 后者是 3.10+ 才有的，项目承诺 3.8+，单靠它这条红线在 3.8/3.9 上会被 skip 掉。
+    ALLOWED_IMPORTS = frozenset({"ctypes", "io", "os", "re", "sys", "unicodedata"})
+
     def test_stdlib_only(self):
-        mods = set(re.findall(r"^(?:import|from)\s+([a-zA-Z_][\w.]*)", self.src, re.M))
-        self.assertEqual(mods - set(sys.stdlib_module_names), set())
+        """零依赖红线，无 skip：3.8 上也有判别力。"""
+        outside = sorted(_import_roots(self.src) - self.ALLOWED_IMPORTS)
+        self.assertEqual(outside, [], "白名单外的依赖：%s" % outside)
+
+    @unittest.skipUnless(hasattr(sys, "stdlib_module_names"), "需要 Python 3.10+ 的标准库清单")
+    def test_allowlist_contains_only_stdlib(self):
+        extra = sorted(self.ALLOWED_IMPORTS - set(sys.stdlib_module_names))
+        self.assertEqual(extra, [], "白名单里出现了非标准库模块：%s" % extra)
+
+    def test_scanner_flags_third_party_imports(self):
+        """证明判据非恒真：喂合成源码，差集必须恰为那两个第三方模块。3.8 上也跑。"""
+        src = "import requests\nfrom numpy import array\nimport os\n"
+        self.assertEqual(sorted(_import_roots(src) - self.ALLOWED_IMPORTS),
+                         ["numpy", "requests"])
 
 
 class OutTest(unittest.TestCase):

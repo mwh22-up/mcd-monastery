@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""五仪式 --demo 输出的黄金回归：版式对齐 + 数值与 docs/demo.md 逐条一致。
+"""五日课 --demo 输出的黄金回归：版式对齐 + 数值与 docs/demo.md 逐条一致。
 
-golden 由 `python cli/monastery.py --demo <命令> > tests/golden/<命令>.txt` 生成
+golden 由 `python cli/cathedral.py --demo <日课> > tests/golden/<日课>.txt` 生成
 （必须重定向到文件，借非 TTY 自动降级拿纯文本无转义码版本）。
 """
 import os
@@ -18,13 +18,13 @@ import ui  # noqa: E402  —— sys.path 注入之后才能 import
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(TESTS_DIR, ".."))
-SCRIPT = os.path.join(REPO, "cli", "monastery.py")
+SCRIPT = os.path.join(REPO, "cli", "cathedral.py")
 GOLDEN_DIR = os.path.join(TESTS_DIR, "golden")
-RITUALS = ("morning", "blessing", "inventory", "transcend", "merit")
+RITUALS = ("matins", "grace", "relics", "vigil", "ledger")
 FRAME_CHARS = set("┏┓┗┛━┃┌┐└┘─│")
 HEAVY_CHARS = set("┏┓┗┛━┃")
 DOC_SOURCES = ("README.md", os.path.join("docs", "demo.md"))
-DEMO_MARK = "演示模式 · DEMO"      # 仪式输出块的判据：目录树与命令示例都不带它
+DEMO_MARK = "演示模式 · DEMO"      # 日课输出块的判据：目录树与命令示例都不带它
 
 
 def run_cli(*args):
@@ -89,7 +89,7 @@ class GoldenTest(unittest.TestCase):
 
 
 class DocBlockTest(unittest.TestCase):
-    """文档里的仪式输出块必须逐字取自 golden —— README 自己声明「一律从 golden 复制，不手写」。
+    """文档里的日课输出块必须逐字取自 golden —— README 自己声明「一律从 golden 复制，不手写」。
 
     golden 已由 GoldenTest 锁在 CLI 上，这里把文档也锁上，补齐 CLI → golden → 文档的最后一环：
     改了版面只重新生成 golden 而忘了回填文档，会在这里红。
@@ -108,7 +108,7 @@ class DocBlockTest(unittest.TestCase):
                         any(body in text for text in goldens),
                         "%s 第 %d 行起的输出块已与 tests/golden/ 漂移，请从 golden 重新复制"
                         % (rel, lineno))
-        self.assertEqual(found, 6, "应有 6 个仪式输出块：README 晨课 1 + demo.md 五仪式 5")
+        self.assertEqual(found, 6, "应有 6 个日课输出块：README 晨祷 1 + demo.md 五日课 5")
 
     def test_demo_md_quotes_every_ritual_in_full(self):
         doc = read_doc(os.path.join("docs", "demo.md"))
@@ -117,9 +117,9 @@ class DocBlockTest(unittest.TestCase):
                 self.assertIn(read_golden(name).strip(), doc,
                               "docs/demo.md 缺 %s 的完整 golden 输出" % name)
 
-    def test_readme_shows_the_morning_ritual(self):
-        self.assertIn(read_golden("morning").strip(), read_doc("README.md"),
-                      "README 第二屏的晨课输出块已与 golden 漂移")
+    def test_readme_shows_the_matins_ritual(self):
+        self.assertIn(read_golden("matins").strip(), read_doc("README.md"),
+                      "README 第二屏的晨祷输出块已与 golden 漂移")
 
 
 class DemoBannerTest(unittest.TestCase):
@@ -154,9 +154,9 @@ class AlignmentTest(unittest.TestCase):
                                      "%s: %r" % (name, line))
 
     def test_tomb_block_is_narrower_but_self_consistent(self):
-        body = [line.strip() for line in read_golden("inventory").splitlines()
+        body = [line.strip() for line in read_golden("relics").splitlines()
                 if line.startswith(" ") and line.strip() and line.strip()[0] in HEAVY_CHARS]
-        self.assertTrue(body, "inventory 应有往生碑区块")
+        self.assertTrue(body, "relics 应有安息名录碑区块")
         widths = set(ui.disp_width(line) for line in body)
         self.assertEqual(len(widths), 1, widths)
         self.assertLess(widths.pop(), ui.CARD_W)
@@ -174,48 +174,48 @@ class DemoDataTest(unittest.TestCase):
     """渲染出的数值必须与 docs/demo.md 逐条一致（派生值现算，不是写死的）。"""
 
     def test_countdown_days_are_sorted_ascending(self):
-        days = [int(m) for m in re.findall(r"剩 (\d+) 天", read_golden("inventory"))]
+        days = [int(m) for m in re.findall(r"剩 (\d+) 天", read_golden("relics"))]
         self.assertEqual(days, [0, 0, 0, 1, 2, 3, 4, 5, 5, 5, 5, 6])
-        self.assertEqual(days, sorted(days))
 
-    def test_transcend_shares_the_same_order(self):
-        days = [int(m) for m in re.findall(r"剩 (\d+) 天", read_golden("transcend"))]
+    def test_vigil_shares_the_same_order(self):
+        days = [int(m) for m in re.findall(r"剩 (\d+) 天", read_golden("vigil"))]
         self.assertEqual(days, [0, 0, 0, 1, 2, 3, 4, 5, 5, 5, 5, 6])
 
     def test_countdown_bars_are_colorless_and_full_width(self):
-        for name in ("inventory", "transcend"):
+        for name in ("relics", "vigil"):
             bars = re.findall(r"[%s%s]+" % (ui.BAR_FULL, ui.BAR_EMPTY), read_golden(name))
             self.assertEqual(len(bars), 12)
             for one in bars:
                 self.assertEqual(len(one), 10, one)
 
     def test_zero_day_bar_is_empty_and_six_day_bar_is_nearly_full(self):
-        rows = [line for line in read_golden("inventory").splitlines() if "剩 0 天" in line]
+        rows = [line for line in read_golden("relics").splitlines() if "剩 0 天" in line]
         self.assertEqual(len(rows), 3)
         for row in rows:
             self.assertIn(ui.BAR_EMPTY * 10, row)
-        six = [line for line in read_golden("inventory").splitlines() if "剩 6 天" in line]
+        six = [line for line in read_golden("relics").splitlines() if "剩 6 天" in line]
         self.assertIn(ui.BAR_FULL * 9 + ui.BAR_EMPTY, six[0])
 
-    def test_inventory_numbers(self):
-        text = read_golden("inventory")
-        self.assertIn("在持 27 张，其中 12 张七日内魂飞魄散", text)
+    def test_relics_numbers(self):
+        text = read_golden("relics")
+        self.assertIn("在持 27 张，其中 12 张七日内烛火熄灭", text)
         self.assertIn("1483 分", text)
         self.assertIn("3465.8 分", text)
         self.assertIn("1572.8 积分", text)
         self.assertIn("【圣物 27 · 临期 12】", text)
-        self.assertNotIn("下月圆寂", text)      # nextMouthExpirePoint 为 0，不出现该行
+        self.assertNotIn("下月熄灭", text)      # nextMouthExpirePoint 为 0，不出现该行
 
-    def test_merit_numbers(self):
-        text = read_golden("merit")
-        self.assertIn("薯条骑士（功德 2709 点）", text)
-        self.assertIn("10 次朝圣，累计布施 220.9 元", text)
+    def test_ledger_numbers(self):
+        text = read_golden("ledger")
+        self.assertIn("薯条骑士（奉献值 2709 点）", text)
+        self.assertIn("10 次朝圣，累计奉献 220.9 元", text)
         self.assertIn("南京徐庄路快捷小站（6 次）", text)
-        self.assertIn("【薯条骑士 · 功德 2709】", text)
-        self.assertNotIn("kcal", text)          # 实测未命中营养库，不出现热量行
+        self.assertIn("【薯条骑士 · 奉献值 2709】", text)
+        # 实测未命中营养库，不出现热量行；非零分支由 tests/test_render_branches.py 覆盖
+        self.assertNotIn("kcal", text)
 
-    def test_morning_campaigns_are_sanitized(self):
-        text = read_golden("morning")
+    def test_matins_campaigns_are_sanitized(self):
+        text = read_golden("matins")
         self.assertIn("超值9.9元早餐两件套陪你开工啦", text)
         self.assertIn("麦当劳 X PEACEMINUSONE", text)
         self.assertIn("2026-10-10 星期六", text)   # D10：自维护中文星期表
@@ -223,10 +223,10 @@ class DemoDataTest(unittest.TestCase):
         for junk in ("😋", "🥳", "❤", "𝟗"):
             self.assertNotIn(junk, text)
 
-    def test_blessing_is_idempotent_message(self):
-        text = read_golden("blessing")
-        self.assertIn("施主福缘已满，今日无可领之福。明日再来。", text)
-        self.assertIn("【福缘已满】", text)
+    def test_grace_is_idempotent_message(self):
+        text = read_golden("grace")
+        self.assertIn("信徒的恩惠已领尽，今日无可领之券。明日再来。", text)
+        self.assertIn("【恩惠已领尽】", text)
 
 
 class ExitCodeTest(unittest.TestCase):
@@ -241,7 +241,7 @@ class ExitCodeTest(unittest.TestCase):
     def test_no_argument_prints_usage_and_exits_zero(self):
         code, out, _ = run_cli()
         self.assertEqual(code, 0)
-        self.assertIn("麦门修道院 · 五大仪式", out)
+        self.assertIn("麦门大教堂 · 五大日课", out)
         for name in RITUALS:
             self.assertIn(name, out)
 
@@ -250,17 +250,31 @@ class ExitCodeTest(unittest.TestCase):
             with self.subTest(flag=flag):
                 code, out, _ = run_cli(flag)
                 self.assertEqual(code, 0)
-                self.assertIn("麦门修道院 · 五大仪式", out)
+                self.assertIn("麦门大教堂 · 五大日课", out)
 
     def test_bad_command_exits_one(self):
         code, out, _ = run_cli("badcmd")
         self.assertEqual(code, 1)
-        self.assertIn("查无此仪式", out)
+        self.assertIn("查无此日课", out)
 
     def test_unknown_flag_exits_two(self):
-        code, out, _ = run_cli("--nope", "merit")
+        code, out, _ = run_cli("--nope", "ledger")
         self.assertEqual(code, 2)
         self.assertIn("无法辨识的选项", out)
+
+    def test_extra_positional_arg_exits_two(self):
+        """多余位置参数不许被静默吞掉（报告 L4）。只断退出码与首行文案，不断颜色。"""
+        code, out, _ = run_cli("matins", "relics")
+        self.assertEqual(code, 2)
+        self.assertIn("多余的参数", out)
+        self.assertNotIn("缺少凭证", out)
+
+    def test_usage_shows_the_full_demo_command(self):
+        """凭证面板里的 --demo 命令必须完整可见 —— 挤成一行会被 ui.trunc 截成 '..'。"""
+        code, out, _ = run_cli()
+        self.assertEqual(code, 0)
+        self.assertIn("python cli/cathedral.py --demo relics", out)
+        self.assertNotIn("--demo relic..", out)
 
 
 if __name__ == "__main__":
